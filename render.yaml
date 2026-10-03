@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: taskwork-telegram-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_TELEGRAM_ID
+        sync: false
+      - key: SUPPORT_USERNAME
+        sync: false
+      - key: DB_PATH
+        value: data/taskwork.db
+      - key: PORT
+        value: 3000
+    disk:
+      name: taskwork-data
+      mountPath: /app/data
+      sizeGB: 1

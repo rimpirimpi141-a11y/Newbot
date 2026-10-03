@@ -1,0 +1,6 @@
+{
+  "name": "TaskWork Bot - Official Telegram Bot Clone",
+  "description": "Production-ready Telegram Bot backend for TaskWork task micro-earnings, proof verification, wallet, UPI withdrawals, and referrals using grammY and SQLite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
