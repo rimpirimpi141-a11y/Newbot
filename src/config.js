@@ -7,9 +7,9 @@ dotenv.config();
 const config = {
   botToken: process.env.BOT_TOKEN || '',
   adminTelegramId: process.env.ADMIN_TELEGRAM_ID ? String(process.env.ADMIN_TELEGRAM_ID).trim() : '',
-  supportUsername: (process.env.SUPPORT_USERNAME || 'Support').replace(/^@/, ''),
-  dbPath: process.env.DB_PATH || path.join(process.cwd(), 'data', 'taskwork.db'),
-  port: parseInt(process.env.PORT || '3000', 10),
+  supportUsername: (process.env.SUPPORT_USERNAME || 'TaskWorkSupport').replace(/^@/, ''),
+  dbPath: process.env.DB_PATH || path.join(process.cwd(), 'data', 'bot.db'),
+  port: parseInt(process.env.PORT || '10000', 10),
   defaultMinimumWithdrawalPaise: 1500, // ₹15.00
   defaultReferralRewardPaise: 20, // ₹0.20
 };

@@ -3,48 +3,43 @@ import config from './src/config.js';
 import { initDatabase, getDatabase } from './src/database.js';
 import { startBotPolling, stopBotPolling } from './src/bot.js';
 
-const PORT = parseInt(process.env.PORT || config.port || '3000', 10);
+const PORT = parseInt(process.env.PORT || config.port || '10000', 10);
 
 /**
- * 1. Lightweight HTTP Server for Render Health Checks & Port Binding
+ * 1. Dummy HTTP Server for Render Web Service Health Checks & Port Binding
  */
 const server = http.createServer((req, res) => {
   const url = req.url || '/';
 
   // Render Web Service root health check and status endpoints
   if (url === '/' || url === '/health' || url === '/api/status') {
+    let stats = { totalUsers: 0, activeTasks: 0, pendingProofs: 0, pendingWithdrawals: 0 };
     try {
-      let stats = { totalUsers: 0, activeTasks: 0, pendingProofs: 0, pendingWithdrawals: 0 };
-      try {
-        const db = getDatabase();
-        stats.totalUsers = db.get('SELECT COUNT(*) as count FROM users')?.count || 0;
-        stats.activeTasks = db.get("SELECT COUNT(*) as count FROM tasks WHERE status = 'active'")?.count || 0;
-        stats.pendingProofs = db.get("SELECT COUNT(*) as count FROM submissions WHERE status = 'pending'")?.count || 0;
-        stats.pendingWithdrawals = db.get("SELECT COUNT(*) as count FROM withdrawals WHERE status = 'pending'")?.count || 0;
-      } catch {}
+      const db = getDatabase();
+      stats.totalUsers = db.get('SELECT COUNT(*) as count FROM users')?.count || 0;
+      stats.activeTasks = db.get("SELECT COUNT(*) as count FROM tasks WHERE status = 'active'")?.count || 0;
+      stats.pendingProofs = db.get("SELECT COUNT(*) as count FROM submissions WHERE status = 'pending'")?.count || 0;
+      stats.pendingWithdrawals = db.get("SELECT COUNT(*) as count FROM withdrawals WHERE status = 'pending'")?.count || 0;
+    } catch {}
 
-      const responseBody = JSON.stringify({
-        status: 'ok',
-        service: 'TaskWork Telegram Bot',
-        polling: true,
-        botConfigured: Boolean(config.botToken && !config.botToken.startsWith('123456789')),
-        stats,
-        uptimeSeconds: Math.floor(process.uptime()),
-        timestamp: new Date().toISOString(),
-      });
+    const responseBody = JSON.stringify({
+      status: 'ok',
+      service: 'TaskWork Telegram Bot',
+      mode: 'long-polling',
+      botConfigured: Boolean(config.botToken && !config.botToken.startsWith('123456789')),
+      stats,
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    });
 
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-      });
-      return res.end(responseBody);
-    } catch (err) {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      return res.end('OK');
-    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+    });
+    return res.end(responseBody);
   }
 
-  // Fallback 404
+  // Fallback 404 for other endpoints
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
 });
@@ -63,8 +58,8 @@ async function main() {
 
     // Start HTTP Server for Render Port Binding
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(`🌐 HTTP Server listening on port ${PORT} (Render Health Check Ready)`);
-      console.log(`🤖 Bot Polling Status: ${config.botToken ? 'Configured' : 'Waiting for BOT_TOKEN'}`);
+      console.log(`🌐 HTTP Health Server listening on port ${PORT} (Render Web Service Ready)`);
+      console.log(`🤖 Bot Polling Status: ${config.botToken ? 'Active' : 'Waiting for BOT_TOKEN in environment'}`);
     });
   } catch (err) {
     console.error('Fatal initialization error:', err);
