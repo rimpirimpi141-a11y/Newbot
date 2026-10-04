@@ -3,21 +3,33 @@ import config from './config.js';
 import { isSuperAdmin } from './utils/admin.js';
 
 /**
- * Main User Persistent Reply Keyboard
+ * Main User Persistent Reply Keyboard with Vibrant Color-Themed Emoji Styling & Toggle Control
  */
 export function getMainUserKeyboard(isAdminUser = false) {
   const keyboard = new Keyboard()
-    .text('🎯 Get Review Task').text('📧 Get Gmail Task').row()
-    .text('📋 All Tasks').text('👥 Invite & Earn').row()
-    .text('💰 Wallet').text('💸 Withdraw').row()
-    .text('🏆 Leaderboard').text('📊 My Stats').row()
-    .text('💝 Support');
+    .text('🟢 View Tasks').text('✅ Submit Work').row()
+    .text('🎯 Review Tasks').text('📧 Gmail Tasks').row()
+    .text('💰 Wallet / Balance').text('💳 Withdraw').row()
+    .text('👥 Refer & Earn').text('📊 My Stats').row()
+    .text('🏆 Leaderboard').text('🆘 Support').row();
 
   if (isAdminUser) {
-    keyboard.row().text('⚡ Admin Panel');
+    keyboard.text('⚡ Admin Panel').text('🔽 Hide Menu');
+  } else {
+    keyboard.text('🔽 Hide Menu');
   }
 
   return keyboard.resized().persistent();
+}
+
+/**
+ * Minimized Toggle Keyboard (Allows 1-tap expansion back to full menu)
+ */
+export function getMinimizedMenuKeyboard() {
+  return new Keyboard()
+    .text('🔼 Show Menu')
+    .resized()
+    .persistent();
 }
 
 /**
@@ -70,7 +82,7 @@ export function getTaskListKeyboard(tasks, page = 1, totalPages = 1, type = 'all
   const keyboard = new InlineKeyboard();
 
   tasks.forEach((t) => {
-    const icon = t.type === 'review' ? '🎯' : t.type === 'gmail' ? '📧' : '📋';
+    const icon = t.type === 'review' ? '🎯' : t.type === 'gmail' ? '📧' : '🟢';
     const rewardRupees = (t.reward_paise / 100).toFixed(2);
     keyboard.text(`${icon} ${t.title.slice(0, 24)} (₹${rewardRupees})`, `view_task_${t.task_id}`).row();
   });

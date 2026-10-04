@@ -22,7 +22,6 @@ export async function checkForceChannelMembership(ctx, userId) {
     return { required: true, isMember, channel: channelId };
   } catch (err) {
     console.error(`Force channel check failed for channel "${channelId}" user "${userId}":`, err.message);
-    // If bot is not admin in channel or error occurs, don't hard-block users permanently if error is bot permission
     if (err.description && err.description.includes('chat not found')) {
       console.warn('Force channel not found or bot lacks access. Skipping check.');
       return { required: false, isMember: true, channel: channelId };
@@ -129,14 +128,13 @@ export function setupStartHandlers(bot) {
     const welcomeMsg =
       `👋 <b>Welcome to TaskWork Bot, ${escapeHtml(from.first_name || 'User')}!</b> 🚀\n\n` +
       `Complete legitimate online tasks, submit proof, and earn real money directly to your UPI!\n\n` +
-      `📌 <b>How it works:</b>\n` +
-      `1️⃣ Choose a task from <b>🎯 Get Review Task</b>, <b>📧 Get Gmail Task</b>, or <b>📋 All Tasks</b>\n` +
-      `2️⃣ Complete the instructions carefully\n` +
-      `3️⃣ Submit a screenshot proof\n` +
-      `4️⃣ Get paid once approved!\n` +
-      `5️⃣ Withdraw your earnings via UPI in <b>💸 Withdraw</b>\n\n` +
-      `💡 Invite friends using <b>👥 Invite & Earn</b> for bonus rewards on their first approved task!\n\n` +
-      `👇 <i>Select an option from the menu below to get started:</i>`;
+      `📌 <b>Action Menu:</b>\n` +
+      `🟢 <b>Earning:</b> <code>🟢 View Tasks</code> | <code>✅ Submit Work</code>\n` +
+      `🟡 <b>Money:</b> <code>💰 Wallet / Balance</code> | <code>💳 Withdraw</code>\n` +
+      `🔵 <b>Growth:</b> <code>👥 Refer & Earn</code>\n` +
+      `🟣 <b>Profile:</b> <code>📊 My Stats</code> | <code>🏆 Leaderboard</code>\n` +
+      `⚙️ <b>Support:</b> <code>🆘 Support</code>\n\n` +
+      `💡 <i>Tip: Use <b>🔽 Hide Menu</b> or send <code>/menu</code> anytime to toggle your dashboard.</i>`;
 
     return ctx.reply(welcomeMsg, {
       parse_mode: 'HTML',

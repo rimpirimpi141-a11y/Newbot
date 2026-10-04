@@ -263,7 +263,7 @@ export async function executeWithdrawalConfirmation(ctx) {
  * Setup withdrawal routes
  */
 export function setupWithdrawalsHandlers(bot) {
-  bot.hears('💸 Withdraw', startWithdrawal);
+  bot.hears(['💳 Withdraw', '💸 Withdraw'], startWithdrawal);
   bot.command('withdraw', startWithdrawal);
 
   bot.callbackQuery('wd_amount_max', async (ctx) => {

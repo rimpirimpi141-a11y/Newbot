@@ -1,5 +1,6 @@
+import { InlineKeyboard } from 'grammy';
 import { getDatabase } from '../database.js';
-import { formatPaise, escapeHtml, formatDateTime } from '../utils/helpers.js';
+import { formatPaise, escapeHtml } from '../utils/helpers.js';
 import { getTaskListKeyboard, getTaskActionKeyboard } from '../keyboards.js';
 import { checkForceChannelMembership, getOrCreateUser } from './start.js';
 
@@ -51,7 +52,7 @@ export async function renderTaskBrowser(ctx, type = 'all', page = 1, isEdit = fa
 
   const { tasks, totalPages } = getAvailableTasks(type, page);
 
-  const typeName = type === 'review' ? '🎯 Review Tasks' : type === 'gmail' ? '📧 Gmail Tasks' : '📋 All Available Tasks';
+  const typeName = type === 'review' ? '🎯 Review Tasks' : type === 'gmail' ? '📧 Gmail Tasks' : '🟢 View All Tasks';
 
   if (tasks.length === 0) {
     const emptyMsg =
@@ -96,6 +97,57 @@ export async function renderTaskBrowser(ctx, type = 'all', page = 1, isEdit = fa
 }
 
 /**
+ * Show Submit Work interface (lists user's active claims to submit proof)
+ */
+export async function showSubmitWork(ctx) {
+  const user = getOrCreateUser(ctx.from);
+  if (user.is_banned) {
+    return ctx.reply('🚫 Your account is suspended.');
+  }
+
+  const db = getDatabase();
+  const claimedTasks = db.all(
+    `SELECT t.* FROM task_claims c 
+     JOIN tasks t ON c.task_id = t.task_id 
+     WHERE c.user_id = ? AND c.status = 'claimed' AND t.status = 'active'`,
+    [user.telegram_id]
+  );
+
+  if (claimedTasks.length === 0) {
+    const keyboard = new InlineKeyboard()
+      .text('🟢 Browse Available Tasks', 'menu_all_tasks');
+
+    return ctx.reply(
+      `✅ <b>Submit Work / Task Proof</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `You have no active claimed tasks currently.\n\n` +
+      `👇 <i>Browse tasks first, tap <b>Claim This Task</b>, complete the instructions, and then submit your screenshot!</i>`,
+      {
+        parse_mode: 'HTML',
+        reply_markup: keyboard,
+      }
+    );
+  }
+
+  const keyboard = new InlineKeyboard();
+  claimedTasks.forEach((t) => {
+    keyboard.text(`📸 Submit: ${t.title.slice(0, 20)}`, `submit_proof_${t.task_id}`).row();
+  });
+  keyboard.text('🟢 View All Tasks', 'menu_all_tasks');
+
+  return ctx.reply(
+    `✅ <b>Submit Work / Proof</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `You have <b>${claimedTasks.length}</b> claimed task(s) in progress.\n\n` +
+    `👇 <i>Select which task you want to submit proof for:</i>`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    }
+  );
+}
+
+/**
  * Show detailed view of a specific task
  */
 export async function showTaskDetails(ctx, taskId, isEdit = true) {
@@ -125,7 +177,7 @@ export async function showTaskDetails(ctx, taskId, isEdit = true) {
     [user.telegram_id, taskId]
   );
 
-  const typeIcon = task.type === 'review' ? '🎯' : task.type === 'gmail' ? '📧' : '📋';
+  const typeIcon = task.type === 'review' ? '🎯' : task.type === 'gmail' ? '📧' : '🟢';
   const typeLabel = task.type === 'review' ? 'Review Task' : task.type === 'gmail' ? 'Gmail Task' : 'Custom Task';
 
   let statusBadge = '🟢 Available';
@@ -216,7 +268,6 @@ export async function claimTask(ctx, taskId) {
     return ctx.answerCallbackQuery({ text: '⏳ You have a proof submission currently under review for this task.', show_alert: true });
   }
 
-  // Create or refresh claim
   const now = new Date().toISOString();
   db.runImmediate(
     'INSERT INTO task_claims (user_id, task_id, status, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, task_id) DO UPDATE SET status = ?, created_at = ?',
@@ -247,9 +298,10 @@ export async function cancelClaim(ctx, taskId) {
  * Setup task navigation handlers
  */
 export function setupTasksHandlers(bot) {
-  bot.hears('🎯 Get Review Task', (ctx) => renderTaskBrowser(ctx, 'review', 1));
-  bot.hears('📧 Get Gmail Task', (ctx) => renderTaskBrowser(ctx, 'gmail', 1));
-  bot.hears('📋 All Tasks', (ctx) => renderTaskBrowser(ctx, 'all', 1));
+  bot.hears(['🟢 View Tasks', '📋 All Tasks', '📋 View Tasks'], (ctx) => renderTaskBrowser(ctx, 'all', 1));
+  bot.hears(['🎯 Review Tasks', '🎯 Get Review Task'], (ctx) => renderTaskBrowser(ctx, 'review', 1));
+  bot.hears(['📧 Gmail Tasks', '📧 Get Gmail Task'], (ctx) => renderTaskBrowser(ctx, 'gmail', 1));
+  bot.hears(['✅ Submit Work', '✅ Submit Proof'], showSubmitWork);
   bot.command('tasks', (ctx) => renderTaskBrowser(ctx, 'all', 1));
 
   bot.callbackQuery('menu_all_tasks', (ctx) => {

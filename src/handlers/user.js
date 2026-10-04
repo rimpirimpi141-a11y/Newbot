@@ -1,9 +1,9 @@
 import config from '../config.js';
 import { getDatabase } from '../database.js';
 import { formatPaise, formatSafeName, getReferralLink, escapeHtml, formatDateTime } from '../utils/helpers.js';
-import { getMainUserKeyboard, getSupportKeyboard } from '../keyboards.js';
+import { getMainUserKeyboard, getMinimizedMenuKeyboard, getSupportKeyboard } from '../keyboards.js';
 import { isAdmin } from '../utils/admin.js';
-import { getOrCreateUser, checkForceChannelMembership } from './start.js';
+import { getOrCreateUser } from './start.js';
 
 /**
  * Handle Wallet / Balance view
@@ -16,21 +16,18 @@ export async function showWallet(ctx) {
 
   const db = getDatabase();
 
-  // Get completed tasks count
   const completedStats = db.get(
     "SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND status = 'approved'",
     [user.telegram_id]
   );
   const completedCount = completedStats ? completedStats.count : 0;
 
-  // Get pending proofs count
   const pendingStats = db.get(
     "SELECT COUNT(*) as count FROM submissions WHERE user_id = ? AND status = 'pending'",
     [user.telegram_id]
   );
   const pendingCount = pendingStats ? pendingStats.count : 0;
 
-  // Get recent 5 transactions
   const txs = db.all(
     'SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT 5',
     [user.telegram_id]
@@ -51,7 +48,7 @@ export async function showWallet(ctx) {
   }
 
   const walletMsg =
-    `💰 <b>TaskWork Wallet</b>\n` +
+    `🟡 <b>TaskWork Wallet & Balance</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `💵 <b>Available Balance:</b> <code>${formatPaise(user.balance_paise)}</code>\n` +
     `📈 <b>Total Earned:</b> <code>${formatPaise(user.total_earned_paise)}</code>\n` +
@@ -63,7 +60,7 @@ export async function showWallet(ctx) {
     `━━━━━━━━━━━━━━━━━━━━\n` +
     txText +
     `\n━━━━━━━━━━━━━━━━━━━━\n` +
-    `💡 <i>To request a payout to your UPI, tap <b>💸 Withdraw</b>.</i>`;
+    `💡 <i>To request a payout to your UPI, tap <b>💳 Withdraw</b>.</i>`;
 
   return ctx.reply(walletMsg, {
     parse_mode: 'HTML',
@@ -108,7 +105,7 @@ export async function showMyStats(ctx) {
   );
 
   const statsMsg =
-    `📊 <b>Your TaskWork Statistics</b>\n` +
+    `🟣 <b>Your TaskWork Performance Profile</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `👤 <b>User:</b> ${escapeHtml(user.first_name || 'User')} (ID: <code>${user.telegram_id}</code>)\n` +
     `🏆 <b>Global Rank:</b> #${rankRow ? rankRow.rank : 'N/A'}\n\n` +
@@ -171,7 +168,7 @@ export async function showLeaderboard(ctx) {
 }
 
 /**
- * Handle Invite & Earn view
+ * Handle Refer & Earn view
  */
 export async function showInviteAndEarn(ctx) {
   const user = getOrCreateUser(ctx.from);
@@ -190,7 +187,7 @@ export async function showInviteAndEarn(ctx) {
   );
 
   const inviteMsg =
-    `👥 <b>TaskWork Referral Program</b>\n` +
+    `🔵 <b>Refer & Earn Program</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `Earn <b>${formatPaise(refRewardPaise)}</b> for every friend you invite once they complete their <b>first approved task</b>!\n\n` +
     `🔗 <b>Your Exclusive Invite Link:</b>\n` +
@@ -209,12 +206,12 @@ export async function showInviteAndEarn(ctx) {
 }
 
 /**
- * Handle Support & Help view
+ * Handle Support view
  */
 export async function showSupport(ctx) {
   const supportName = config.supportUsername || 'TaskWorkSupport';
   const helpMsg =
-    `💝 <b>TaskWork Support & Helpdesk</b>\n` +
+    `⚙️ <b>TaskWork Support & Helpdesk</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `Need help, have a question regarding tasks, or facing any payment issue?\n\n` +
     `📩 <b>Official Support:</b> @${supportName}\n` +
@@ -232,10 +229,37 @@ export async function showSupport(ctx) {
 }
 
 /**
+ * Collapse/Hide Menu
+ */
+export async function hideMenu(ctx) {
+  return ctx.reply(
+    `🔻 <b>Menu Minimized</b>\n\nTap <b>🔼 Show Menu</b> below or send <code>/menu</code> anytime to restore your full dashboard.`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: getMinimizedMenuKeyboard(),
+    }
+  );
+}
+
+/**
+ * Expand/Show Full Menu
+ */
+export async function showMenu(ctx) {
+  const isUserAdmin = isAdmin(ctx.from?.id);
+  return ctx.reply(
+    `🔼 <b>Main Action Menu Restored</b>\n\nSelect an option below:`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: getMainUserKeyboard(isUserAdmin),
+    }
+  );
+}
+
+/**
  * Setup user commands and menu handlers
  */
 export function setupUserHandlers(bot) {
-  bot.hears('💰 Wallet', showWallet);
+  bot.hears(['💰 Wallet / Balance', '💰 Wallet'], showWallet);
   bot.command('balance', showWallet);
 
   bot.hears('📊 My Stats', showMyStats);
@@ -244,10 +268,17 @@ export function setupUserHandlers(bot) {
   bot.hears('🏆 Leaderboard', showLeaderboard);
   bot.command('leaderboard', showLeaderboard);
 
-  bot.hears('👥 Invite & Earn', showInviteAndEarn);
+  bot.hears(['👥 Refer & Earn', '👥 Invite & Earn'], showInviteAndEarn);
 
-  bot.hears('💝 Support', showSupport);
+  bot.hears(['🆘 Support', '💝 Support'], showSupport);
   bot.command('help', showSupport);
+
+  // Toggle Controls
+  bot.hears('🔽 Hide Menu', hideMenu);
+  bot.command('hidemenu', hideMenu);
+
+  bot.hears('🔼 Show Menu', showMenu);
+  bot.command('menu', showMenu);
 
   bot.callbackQuery('refresh_stats', async (ctx) => {
     await ctx.answerCallbackQuery({ text: 'Refreshed!' });

@@ -17,6 +17,7 @@ import { isSuperAdmin, isAdmin, logAdminAction } from './utils/admin.js';
 
 let botInstance = null;
 let isPolling = false;
+let commandsRegistered = false;
 
 export async function createBot() {
   await initDatabase();
@@ -28,7 +29,7 @@ export async function createBot() {
   // 1. Global Error Handler
   bot.catch((err) => {
     const ctx = err.ctx;
-    console.error(`[Telegram Error] while handling update ${ctx?.update?.update_id}:`, err.error);
+    console.error(`[Telegram Error] while handling update ${ctx?.update?.update_id}:`, err.error?.message || err.error);
     if (err.error?.error_code === 409) {
       console.error('⚠️ Telegram 409 Conflict: Another bot instance is running with the same BOT_TOKEN.');
     }
@@ -348,12 +349,16 @@ export async function createBot() {
 }
 
 /**
- * Register commands with Telegram API
+ * Register commands with Telegram API safely (only once per process lifetime to prevent 429 errors)
  */
 export async function registerBotCommands(bot) {
+  if (commandsRegistered) return;
+
   try {
     await bot.api.setMyCommands([
       { command: 'start', description: 'Start TaskWork Bot and open Main Menu' },
+      { command: 'menu', description: 'Show full interactive action menu' },
+      { command: 'hidemenu', description: 'Collapse / hide action menu' },
       { command: 'tasks', description: 'Browse and claim available earning tasks' },
       { command: 'balance', description: 'Check wallet balance and earnings' },
       { command: 'withdraw', description: 'Request UPI cashout' },
@@ -363,9 +368,15 @@ export async function registerBotCommands(bot) {
       { command: 'cancel', description: 'Cancel current ongoing operation' },
       { command: 'admin', description: 'Open Administrator Control Center' },
     ]);
+    commandsRegistered = true;
     console.log('✅ Telegram bot commands registered successfully.');
   } catch (err) {
-    console.warn('Could not register bot commands with Telegram API:', err.message);
+    if (err.error_code === 429 || (err.message && err.message.includes('429'))) {
+      const waitTime = err.parameters?.retry_after || 60;
+      console.warn(`[Telegram Rate Limit] Command registration delayed. Will retry later (wait ${waitTime}s).`);
+    } else {
+      console.warn('Could not register bot commands with Telegram API:', err.message);
+    }
   }
 }
 
@@ -378,13 +389,19 @@ export async function startBotPolling() {
     return;
   }
 
+  if (process.env.DISABLE_POLLING === 'true') {
+    console.log('ℹ️ Telegram long polling disabled via DISABLE_POLLING=true.');
+    return;
+  }
+
   if (!config.botToken || config.botToken.startsWith('123456789:ABCdef') || config.botToken.trim() === '') {
     console.warn('⚠️ BOT_TOKEN is not configured or using placeholder. Polling will wait for a valid token in environment variables.');
     return;
   }
 
   let retryDelay = 2000;
-  const maxDelay = 30000;
+  const maxDelay = 60000;
+  let consecutiveConflicts = 0;
 
   async function pollLoop() {
     try {
@@ -393,7 +410,8 @@ export async function startBotPolling() {
 
       console.log('🚀 Starting TaskWork grammY Long Polling process...');
       isPolling = true;
-      retryDelay = 2000; // reset retry delay on success
+      retryDelay = 2000;
+      consecutiveConflicts = 0;
 
       await bot.start({
         onStart: (info) => {
@@ -403,14 +421,26 @@ export async function startBotPolling() {
       });
     } catch (err) {
       isPolling = false;
-      console.error(`[Polling Error] ${err.message || err}. Reconnecting in ${retryDelay / 1000}s...`);
-      
-      // Handle 409 Conflict specifically
-      if (err.error_code === 409 || (err.message && err.message.includes('409'))) {
-        console.error('⚠️ Telegram 409 Conflict: Make sure only ONE bot instance is running for this BOT_TOKEN.');
+      let delay = retryDelay;
+
+      const isConflict = err.error_code === 409 || (err.message && err.message.includes('409'));
+      const isRateLimit = err.error_code === 429 || (err.message && err.message.includes('429'));
+
+      if (isConflict) {
+        consecutiveConflicts++;
+        // Use longer backoff for conflicts (another instance is running with the same BOT_TOKEN)
+        delay = Math.min(10000 * Math.pow(1.5, consecutiveConflicts - 1), 60000);
+        console.warn(
+          `⚠️ [Telegram 409 Conflict] Another instance is currently active with this BOT_TOKEN (e.g. running on Render / another server). Backing off for ${(delay / 1000).toFixed(0)}s to prevent connection fight.`
+        );
+      } else if (isRateLimit && err.parameters?.retry_after) {
+        delay = Math.max(err.parameters.retry_after * 1000, 5000);
+        console.warn(`⏳ [Telegram Rate Limit] Pausing for ${(delay / 1000).toFixed(0)}s before reconnecting...`);
+      } else {
+        console.warn(`[Polling Note] ${err.message || err}. Reconnecting in ${(delay / 1000).toFixed(0)}s...`);
       }
 
-      setTimeout(pollLoop, retryDelay);
+      setTimeout(pollLoop, delay);
       retryDelay = Math.min(retryDelay * 1.5, maxDelay);
     }
   }
